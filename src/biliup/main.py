@@ -25,7 +25,7 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
     driver.get("https://www.bilibili.com")
     driver.set.cookies(cookies)
     driver.get(
-        "https://member.bilibili.com/platform/upload/video/frame/?os=upos&zone=cs&upcdn=bldsa"
+        "https://member.bilibili.com/platform/upload/video/frame"
     )
     driver.ele(".bcc-upload-wrapper").click.to_upload(video_path)
     driver.wait.load_start()
