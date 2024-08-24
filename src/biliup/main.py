@@ -32,7 +32,8 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
     driver.ele(".bcc-upload-wrapper").click.to_upload(video_path)
     driver.wait.load_start()
 
-    driver.ele(".cover-upload").click()
+    driver.wait.eles_loaded("更改封面")
+    driver.ele("更改封面").click()
     driver.ele("上传封面").click()
     driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
     driver.ele(" 完成 ").click()
