@@ -27,8 +27,9 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
     driver.set.cookies(cookies)
     driver.get("https://member.bilibili.com/platform/upload/video/frame")
 
-    driver.wait.eles_loaded(".bcc-upload-wrapper")
-    driver.ele(".bcc-upload-wrapper").click.to_upload(video_path)
+    upload_ele = driver.ele(".bcc-upload-wrapper")
+    upload_ele.wait.displayed()
+    upload_ele.click.to_upload(video_path)
     driver.wait.load_start()
 
     driver.wait.eles_loaded("更改封面")
