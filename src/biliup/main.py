@@ -2,6 +2,7 @@ import json
 
 from DrissionPage import ChromiumOptions, ChromiumPage
 
+
 def update_video(video_path, title, cover_path, tags, description, cookie_path):
     """
     Update a video on Bilibili platform.
@@ -24,9 +25,7 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
     driver = ChromiumPage()
     driver.get("https://www.bilibili.com")
     driver.set.cookies(cookies)
-    driver.get(
-        "https://member.bilibili.com/platform/upload/video/frame"
-    )
+    driver.get("https://member.bilibili.com/platform/upload/video/frame")
 
     driver.wait.eles_loaded(".bcc-upload-wrapper")
     driver.ele(".bcc-upload-wrapper").click.to_upload(video_path)
@@ -56,7 +55,9 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
             p_html = f"<p>{paragraph}</p>"
             driver.add_ele(p_html, desc_elem)
 
-    if not driver.ele("未经作者授权 禁止转载").click():
+    try:
+        driver.ele("未经作者授权 禁止转载").click()
+    except Exception:
         driver.ele("（含声明与权益、视频元素、互动管理等）").click()
         driver.ele("未经作者授权 禁止转载").click()
 
