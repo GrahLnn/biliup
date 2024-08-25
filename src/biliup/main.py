@@ -56,8 +56,9 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
             p_html = f"<p>{paragraph}</p>"
             driver.add_ele(p_html, desc_elem)
 
-    driver.ele("（含声明与权益、视频元素、互动管理等）").click()
-    driver.ele("未经作者授权 禁止转载").click()
+    if not driver.ele("未经作者授权 禁止转载").click():
+        driver.ele("（含声明与权益、视频元素、互动管理等）").click()
+        driver.ele("未经作者授权 禁止转载").click()
 
     driver.ele("立即投稿").click()
 
