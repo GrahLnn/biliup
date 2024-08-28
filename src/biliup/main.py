@@ -27,10 +27,22 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
     driver.set.cookies(cookies)
     driver.get("https://member.bilibili.com/platform/upload/video/frame")
 
-    upload_ele = driver.ele(".bcc-upload-wrapper")
-    upload_ele.wait.displayed()
-    upload_ele.click.to_upload(video_path)
-    driver.wait.load_start()
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            upload_ele = driver.ele(".bcc-upload-wrapper")
+            upload_ele.wait.displayed()
+            upload_ele.click.to_upload(video_path)
+            driver.wait.load_start()
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"上传失败，正在尝试刷新页面并重试（第{attempt+1}次）")
+                driver.refresh()
+                driver.wait.load_complete()
+            else:
+                raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
+
 
     driver.wait.eles_loaded("更改封面")
     driver.ele("更改封面").click()
