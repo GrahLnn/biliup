@@ -39,7 +39,6 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
             if attempt < max_retries - 1:
                 print(f"上传失败，正在尝试刷新页面并重试（第{attempt+1}次）")
                 driver.refresh()
-                driver.wait.load_complete()
             else:
                 raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
 
