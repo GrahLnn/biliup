@@ -47,8 +47,10 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
     driver.ele("更改封面").click()
     driver.ele("上传封面").click()
     driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
-    driver.ele(" 完成 ").click()
-    driver.ele(" 完成 ").wait.disabled_or_deleted()
+    done_ele = driver.ele(" 完成 ")
+    done_ele.wait.displayed()
+    done_ele.click()
+    done_ele.wait.disabled_or_deleted()
 
     title_ele = driver.ele(".video-title").ele(".input-val")
     title_ele.wait.not_covered()
@@ -70,6 +72,7 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
 
 
     driver.run_js('document.querySelector(".setting").removeAttribute("style")')
+    driver.ele("未经作者授权 禁止转载").click()
 
     driver.ele("立即投稿").click()
 
