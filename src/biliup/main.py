@@ -22,7 +22,7 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
     with open(cookie_path) as f:
         cookies = json.load(f)
     co = ChromiumOptions().headless()
-    driver = ChromiumPage()
+    driver = ChromiumPage(co)
     driver.get("https://www.bilibili.com")
     driver.set.cookies(cookies)
     driver.get("https://member.bilibili.com/platform/upload/video/frame")
