@@ -101,7 +101,7 @@ files = [
 
 [[package]]
 name = "downloadkit"
-version = "2.0.2"
+version = "2.0.4"
 requires_python = ">=3.6"
 summary = "一个简洁易用的多线程文件下载工具。"
 groups = ["default"]
@@ -110,18 +110,18 @@ dependencies = [
     "requests",
 ]
 files = [
-    {file = "DownloadKit-2.0.2-py3-none-any.whl", hash = "sha256:b722ac1d69a1d8f23f2fc5dd77c1c1aa105f9f10508fae3de680ad319a96200d"},
-    {file = "DownloadKit-2.0.2.tar.gz", hash = "sha256:7b966e599684191e2c4f48c106a76f94ca2ba9c47a42c690f4636b67f0815983"},
+    {file = "DownloadKit-2.0.4-py3-none-any.whl", hash = "sha256:c5c789ba49bc65251357c0c8ec4b1d723b2f246af84a66e8609e4fa2f63465d9"},
+    {file = "DownloadKit-2.0.4.tar.gz", hash = "sha256:6d63c19f327ef5e78e4e2220d15f363b1e832731fbf95b9a78d09ccaffb17d67"},
 ]
 
 [[package]]
 name = "drissionpage"
-version = "4.0.5.6"
+version = "4.1.0.6"
 requires_python = ">=3.6"
 summary = "Python based web automation tool. It can control the browser and send and receive data packets."
 groups = ["default"]
 dependencies = [
-    "DownloadKit>=2.0.0",
+    "DownloadKit>=2.0.4",
     "click",
     "cssselect",
     "lxml",
@@ -131,8 +131,8 @@ dependencies = [
     "websocket-client",
 ]
 files = [
-    {file = "DrissionPage-4.0.5.6-py3-none-any.whl", hash = "sha256:ba05bfc27c6adba02e5a3e69b13c29412d7c801883412905456f1f73aa3d5fa6"},
-    {file = "DrissionPage-4.0.5.6.tar.gz", hash = "sha256:2f162ddd8c7c7c849e544b0e60fed69b531f4a4eb10cd6d317174da5d9fccd18"},
+    {file = "DrissionPage-4.1.0.6-py3-none-any.whl", hash = "sha256:82e5b06327835e1650779675adb53260c5a059f1fa659ac20db6a812c9181329"},
+    {file = "DrissionPage-4.1.0.6.tar.gz", hash = "sha256:6804a8fe6a1d79ecc09df54f270e33dd29cfa0207e4226d20676efafdefae5e4"},
 ]
 
 [[package]]
