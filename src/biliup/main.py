@@ -21,6 +21,9 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
 
     with open(cookie_path) as f:
         cookies = json.load(f)
+    for cookie in cookies:
+        if 'sameSite' in cookie and cookie['sameSite'] == 'unspecified':
+            cookie['sameSite'] = 'Lax'
     co = ChromiumOptions().headless()
     driver = ChromiumPage(co)
     driver.get("https://www.bilibili.com")
