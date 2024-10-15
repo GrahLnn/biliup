@@ -22,9 +22,14 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
     with open(cookie_path) as f:
         cookies = json.load(f)
     for cookie in cookies:
-        if 'sameSite' in cookie and cookie['sameSite'] == 'unspecified':
-            cookie['sameSite'] = 'Lax'
-    co = ChromiumOptions().headless()
+        if "sameSite" in cookie and cookie["sameSite"] in [
+            "unspecified",
+            "no_restriction",
+        ]:
+            cookie["sameSite"] = "Lax"
+        else:
+            cookie["sameSite"] = cookie["sameSite"].capitalize()
+    co = ChromiumOptions().auto_port().headless()
     driver = ChromiumPage(co)
     driver.get("https://www.bilibili.com")
     driver.set.cookies(cookies)
@@ -44,7 +49,6 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
                 driver.refresh()
             else:
                 raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
-
 
     driver.wait.eles_loaded("更改封面")
     driver.ele("更改封面").click()
@@ -72,7 +76,6 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
         for paragraph in desc_paragraphs[1:]:
             p_html = f"<p>{paragraph}</p>"
             driver.add_ele(p_html, desc_elem)
-
 
     driver.run_js('document.querySelector(".setting").removeAttribute("style")')
     driver.ele("未经作者授权 禁止转载").click()
