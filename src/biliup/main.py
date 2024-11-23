@@ -3,7 +3,7 @@ import json
 from DrissionPage import ChromiumOptions, ChromiumPage
 
 
-def update_video(video_path, title, cover_path, tags, description, cookie_path):
+def update_video(video_path, title, cover_path, tags, description, cookie_path, browser_path=None):
     """
     Update a video on Bilibili platform.
     Args:
@@ -30,6 +30,8 @@ def update_video(video_path, title, cover_path, tags, description, cookie_path):
             else:
                 cookie["sameSite"] = cookie["sameSite"].capitalize()
         co = ChromiumOptions().auto_port().headless()
+        if browser_path:
+           co = co.set_browser_path(browser_path)
         driver = ChromiumPage(co)
         driver.get("https://www.bilibili.com")
         driver.set.cookies(cookies)
