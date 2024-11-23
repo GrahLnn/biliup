@@ -40,7 +40,7 @@ def update_video(
                 cookie["sameSite"] = cookie["sameSite"].capitalize()
         co = ChromiumOptions().auto_port()
         if headless:
-            co = co.set_headless()
+            co = co.headless()
         if browser_path:
             if "msedge.exe" in browser_path:
                 raise ValueError("Microsoft Edge is not supported")
