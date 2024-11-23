@@ -4,7 +4,14 @@ from DrissionPage import ChromiumOptions, ChromiumPage
 
 
 def update_video(
-    video_path, title, cover_path, tags, description, cookie_path, browser_path=None
+    video_path,
+    title,
+    cover_path,
+    tags,
+    description,
+    cookie_path,
+    browser_path=None,
+    headless=True,
 ):
     """
     Update a video on Bilibili platform.
@@ -31,7 +38,9 @@ def update_video(
                 cookie["sameSite"] = "Lax"
             else:
                 cookie["sameSite"] = cookie["sameSite"].capitalize()
-        co = ChromiumOptions().auto_port().headless()
+        co = ChromiumOptions().auto_port()
+        if headless:
+            co = co.set_headless()
         if browser_path:
             if "msedge.exe" in browser_path:
                 raise ValueError("Microsoft Edge is not supported")
@@ -88,6 +97,6 @@ def update_video(
 
         driver.ele("立即投稿").click()
 
-        driver.wait.eles_loaded("稿件投递成功", timeout=3600)
+        driver.wait.eles_loaded("稿件投递成功", timeout=7200)
     finally:
         driver.quit()
