@@ -1,17 +1,9 @@
 [project]
 name = "biliup"
 version = "0.1.0"
-description = "Default template for PDM package"
-authors = [
-    {name = "GrahLnn", email = "grahlnn@skiff.com"},
-]
-dependencies = [
-    "drissionpage>=4.0.5.6",
-]
-requires-python = "==3.11.*"
+description = "Add your description here"
 readme = "README.md"
-license = {text = "MIT"}
-
-
-[tool.pdm]
-distribution = false
+requires-python = ">=3.11"
+dependencies = [
+    "drissionpage>=4.1.0.12",
+]
