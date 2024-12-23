@@ -66,9 +66,12 @@ def update_video(
                     raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
 
         driver.wait.eles_loaded("更改封面")
-        driver.ele("更改封面").click()
-        driver.ele("上传封面").click()
-        driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
+        try:
+            driver.ele("更改封面").click()
+            driver.ele("上传封面").click()
+            driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
+        except Exception:
+            driver.ele(".cover-upload-btn").click.to_upload(cover_path)
         done_ele = driver.ele(" 完成 ")
         done_ele.wait.displayed()
         done_ele.click()
@@ -99,4 +102,5 @@ def update_video(
 
         driver.wait.eles_loaded("稿件投递成功", timeout=7200)
     finally:
-        driver.quit()
+        if headless:
+            driver.quit()
