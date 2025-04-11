@@ -1,4 +1,5 @@
 import json
+import os
 
 from DrissionPage import ChromiumOptions, ChromiumPage
 
@@ -29,12 +30,48 @@ def update_video(
     """
     try:
         with open(cookie_path) as f:
-            cookies = json.load(f)
+            # 根据文件扩展名或内容判断是 JSON 还是 Netscape 格式
+            file_ext = os.path.splitext(cookie_path)[1].lower()
+            if file_ext == '.json':
+                cookies = json.load(f)
+            else:
+                # 尝试读取文件内容来判断格式
+                content = f.read()
+                f.seek(0)  # 重置文件指针
+                
+                # 尝试解析为 JSON
+                try:
+                    cookies = json.loads(content)
+                except json.JSONDecodeError:
+                    # 不是 JSON 格式，尝试解析为 Netscape 格式
+                    cookies = []
+                    for line in content.splitlines():
+                        if line.startswith('#') or not line.strip():
+                            continue
+                        
+                        # Netscape 格式: domain flag path secure expiration name value
+                        parts = line.strip().split('\t')
+                        if len(parts) >= 7:
+                            domain, flag, path, secure, expiration, name, value = parts[:7]
+                            cookie = {
+                                'domain': domain,
+                                'path': path,
+                                'secure': secure.lower() == 'true',
+                                'expires': float(expiration) if expiration.isdigit() else None,
+                                'name': name,
+                                'value': value,
+                                'sameSite': 'Lax'
+                            }
+                            cookies.append(cookie)
+        
+        # 处理 sameSite 属性
         for cookie in cookies:
             if "sameSite" in cookie and cookie["sameSite"] in [
                 "unspecified",
                 "no_restriction",
             ]:
+                cookie["sameSite"] = "Lax"
+            elif "sameSite" not in cookie:
                 cookie["sameSite"] = "Lax"
             else:
                 cookie["sameSite"] = cookie["sameSite"].capitalize()
