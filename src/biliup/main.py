@@ -104,7 +104,7 @@ def update_video(
 
         driver.wait.eles_loaded("更改封面")
         try:
-            driver.ele("更改封面").click()
+            driver.ele(".cover-main-img").click()
             driver.ele("上传封面").click()
             driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
         except Exception:
