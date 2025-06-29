@@ -102,9 +102,9 @@ def update_video(
                 else:
                     raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
 
-        driver.wait.eles_loaded("更改封面")
+        driver.wait.eles_loaded("更换封面")
         try:
-            driver.ele(".cover-main-img").click()
+            driver.ele("更换封面").click()
             driver.ele("上传封面").click()
             driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
         except Exception:
