@@ -38,7 +38,7 @@ def update_video(
                 # 尝试读取文件内容来判断格式
                 content = f.read()
                 f.seek(0)  # 重置文件指针
-                
+
                 # 尝试解析为 JSON
                 try:
                     cookies = json.loads(content)
@@ -48,7 +48,7 @@ def update_video(
                     for line in content.splitlines():
                         if line.startswith('#') or not line.strip():
                             continue
-                        
+
                         # Netscape 格式: domain flag path secure expiration name value
                         parts = line.strip().split('\t')
                         if len(parts) >= 7:
@@ -63,7 +63,7 @@ def update_video(
                                 'sameSite': 'Lax'
                             }
                             cookies.append(cookie)
-        
+
         # 处理 sameSite 属性
         for cookie in cookies:
             if "sameSite" in cookie and cookie["sameSite"] in [
@@ -102,9 +102,9 @@ def update_video(
                 else:
                     raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
 
-        driver.wait.eles_loaded("更换封面")
+        driver.wait.eles_loaded("封面设置")
         try:
-            driver.ele("更换封面").click()
+            driver.ele("封面设置").click()
             driver.ele("上传封面").click()
             driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
         except Exception:
@@ -133,7 +133,7 @@ def update_video(
                 driver.add_ele(p_html, desc_elem)
 
         driver.run_js('document.querySelector(".setting").removeAttribute("style")')
-        driver.ele("未经作者授权 禁止转载").click()
+        # driver.ele("未经作者授权 禁止转载").click()
 
         driver.ele("立即投稿").click()
 
