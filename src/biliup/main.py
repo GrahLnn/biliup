@@ -103,12 +103,9 @@ def update_video(
                     raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
 
         driver.wait.eles_loaded("封面设置")
-        try:
-            driver.ele("封面设置").click()
-            driver.ele("上传封面").click()
-            driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
-        except Exception:
-            driver.ele(".cover-upload-btn").click.to_upload(cover_path)
+        driver.ele("封面设置").click()
+        driver.ele("上传封面").click().click.to_upload(cover_path)
+        # driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
         done_ele = driver.ele(" 完成 ")
         done_ele.wait.displayed()
         done_ele.click()
