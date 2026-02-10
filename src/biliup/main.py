@@ -104,7 +104,7 @@ def update_video(
 
         driver.wait.eles_loaded("封面设置")
         driver.ele("封面设置").click()
-        driver.ele("上传封面").click().click.to_upload(cover_path)
+        driver.ele("上传封面").click.to_upload(cover_path)
         # driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
         done_ele = driver.ele(" 完成 ")
         done_ele.wait.displayed()
