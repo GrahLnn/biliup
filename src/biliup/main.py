@@ -136,5 +136,4 @@ def update_video(
 
         driver.wait.eles_loaded("稿件投递成功", timeout=7200)
     finally:
-        if headless:
-            driver.quit()
+        driver.quit()
