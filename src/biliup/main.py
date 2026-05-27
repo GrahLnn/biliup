@@ -13,6 +13,10 @@ class UploadConfirmationError(RuntimeError):
 SNAPSHOT_PATH = Path("biliup_upload_debug_latest.html")
 
 
+class CoverUploadError(RuntimeError):
+    """Raised when Bilibili cover upload controls are not in the expected state."""
+
+
 def _wait_for_required_result(wait_call, message):
     result = wait_call()
     if result is False:
@@ -31,23 +35,80 @@ def _save_debug_html(driver, reason, path=None):
     return snapshot_path
 
 
+def _first_available(driver, locators, message, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for locator in locators:
+            for element in driver.eles(locator, timeout=0.5):
+                return element
+        time.sleep(0.2)
+    raise CoverUploadError(message)
+
+
+def _first_displayed(driver, locators, message, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for locator in locators:
+            for element in driver.eles(locator, timeout=0.5):
+                if element.states.is_displayed:
+                    return element
+        time.sleep(0.2)
+    raise CoverUploadError(message)
+
+
+def _click_first_displayed(driver, locators, message):
+    element = _first_displayed(driver, locators, message)
+    element.click(by_js=True)
+    return element
+
+
 def _try_upload_cover(driver, cover_path):
     try:
         _wait_for_required_result(
-            lambda: driver.wait.eles_loaded("封面设置"),
+            lambda: driver.wait.eles_loaded(
+                "xpath://span[contains(@class, 'edit-text') and contains(normalize-space(), '封面设置')]"
+            ),
             "Upload page did not expose cover settings after video upload.",
         )
-        driver.ele("封面设置").click()
-        driver.ele("上传封面").click.to_upload(cover_path)
-        done_ele = driver.ele(" 完成 ")
-        _wait_for_required_result(
-            done_ele.wait.displayed,
-            "Cover upload dialog did not show the completion button.",
+        _click_first_displayed(
+            driver,
+            (
+                "xpath://span[contains(@class, 'edit-text') and contains(normalize-space(), '封面设置')]",
+                "text:封面设置",
+            ),
+            "Cover settings entry is not visible.",
         )
-        done_ele.click()
+
+        upload_input = _first_available(
+            driver,
+            (
+                "css:.cover-upload input[type='file'][accept*='image']",
+                "xpath://input[@type='file' and contains(@accept, 'image')]",
+            ),
+            "Cover upload file input is not available.",
+        )
+        upload_input.input(cover_path)
+
+        _click_first_displayed(
+            driver,
+            (
+                "xpath://div[contains(@class, 'cover-editor-button')]//div[contains(@class, 'submit') and contains(normalize-space(), '完成')]",
+                "xpath://div[contains(@class, 'cover-editor-button')]//*[contains(normalize-space(), '完成')]",
+            ),
+            "Cover editor completion button is not visible.",
+        )
+
+        confirm_ele = _click_first_displayed(
+            driver,
+            (
+                "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确定']]",
+                "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确认']]",
+            ),
+            "Cover confirmation button is not visible.",
+        )
         _wait_for_required_result(
-            done_ele.wait.disabled_or_deleted,
-            "Cover upload dialog did not close after completion.",
+            confirm_ele.wait.disabled_or_deleted,
+            "Cover confirmation dialog did not close.",
         )
         return True
     except Exception as exc:

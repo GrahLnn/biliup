@@ -26,12 +26,21 @@ class FakeElementWait:
 
 
 class FakeClick:
-    def __init__(self):
+    def __init__(self, element=None):
+        self.element = element
         self.clicked = False
         self.uploaded_path = None
 
-    def __call__(self):
+    def __call__(self, *args, **kwargs):
         self.clicked = True
+        if self.element is not None and self.element.page is not None:
+            self.element.page.clicks.append((self.element.name, kwargs))
+            if self.element.name in {
+                "cover-settings",
+                "cover-editor-done",
+                "cover-dialog-confirm",
+            }:
+                self.element.page.cover_actions.append((self.element.name, None))
 
     def to_upload(self, path):
         self.uploaded_path = path
@@ -46,18 +55,20 @@ class FakeSet:
 
 
 class FakeStates:
-    is_enabled = True
-    is_alive = True
+    def __init__(self, displayed=True):
+        self.is_enabled = True
+        self.is_alive = True
+        self.is_displayed = displayed
 
 
 class FakeElement:
-    def __init__(self, name, page=None):
+    def __init__(self, name, page=None, displayed=True, disabled_or_deleted=True):
         self.name = name
         self.page = page
-        self.click = FakeClick()
-        self.wait = FakeElementWait()
+        self.click = FakeClick(self)
+        self.wait = FakeElementWait(disabled_or_deleted=disabled_or_deleted)
         self.set = FakeSet()
-        self.states = FakeStates()
+        self.states = FakeStates(displayed)
         self.inputs = []
 
     def ele(self, locator):
@@ -70,6 +81,9 @@ class FakeElement:
         self.inputs.append((value, clear))
         if self.page is not None:
             self.page.inputs.append((self.name, value, clear))
+            if self.name == "cover-file-input":
+                self.page.cover_upload_path = value
+                self.page.cover_actions.append(("upload", value))
 
 
 class FakeWait:
@@ -109,7 +123,7 @@ class FakeWait:
     def eles_loaded(self, locator, timeout=None):
         if locator == "稿件投递成功":
             return self.submit_confirmed
-        if locator == "封面设置":
+        if "封面设置" in locator:
             return self.cover_available
         return True
 
@@ -160,8 +174,11 @@ class FakeChromiumPage:
         self.refreshed = False
         self.urls = []
         self.scripts = []
+        self.clicks = []
         self.inputs = []
         self.elements = []
+        self.cover_upload_path = None
+        self.cover_actions = []
         self.html = "<html><body>debug page</body></html>"
         FakeChromiumPage.instances.append(self)
 
@@ -170,15 +187,36 @@ class FakeChromiumPage:
 
     def ele(self, locator):
         element = FakeElement(locator, self)
-        if locator == " 完成 ":
-            element.wait = FakeElementWait(
-                displayed=self.cover_done_available,
-                disabled_or_deleted=self.cover_close_confirmed,
-            )
-        elif locator == ".video-title" or locator == ".tag-container":
+        if locator == ".video-title" or locator == ".tag-container":
             element.wait = FakeElementWait(displayed=self.element_displayed)
         self.elements.append(element)
         return element
+
+    def eles(self, locator, timeout=None):
+        if "edit-text" in locator or "封面设置" in locator:
+            return [FakeElement("cover-settings", self, displayed=self.cover_available)]
+        if "cover-upload" in locator or "contains(@accept, 'image')" in locator:
+            return [FakeElement("cover-file-input", self, displayed=False)]
+        if "cover-editor-button" in locator and "完成" in locator:
+            return [
+                FakeElement(
+                    "cover-editor-done",
+                    self,
+                    displayed=self.cover_done_available,
+                )
+            ]
+        if "bcc-dialog__footer" in locator and (
+            "确定" in locator or "确认" in locator
+        ):
+            return [
+                FakeElement(
+                    "cover-dialog-confirm",
+                    self,
+                    displayed=self.cover_close_confirmed,
+                    disabled_or_deleted=self.cover_close_confirmed,
+                )
+            ]
+        return []
 
     def refresh(self):
         self.refreshed = True
@@ -232,9 +270,16 @@ def test_update_video_returns_success_and_closes_browser_on_confirmed_submit(
     tmp_path, fake_browser
 ):
     result = call_update_video(write_cookie_file(tmp_path))
+    page = fake_browser.instances[-1]
 
     assert result is True
-    assert fake_browser.instances[-1].quit_called is True
+    assert page.quit_called is True
+    assert page.cover_actions == [
+        ("cover-settings", None),
+        ("upload", "cover.jpg"),
+        ("cover-editor-done", None),
+        ("cover-dialog-confirm", None),
+    ]
 
 
 def test_update_video_keeps_browser_open_when_submit_is_not_confirmed(
@@ -268,3 +313,17 @@ def test_update_video_continues_metadata_fields_when_cover_dialog_fails(
     assert any(value == "title" for _, value, _ in page.inputs)
     assert any(value == "tag\n" for _, value, _ in page.inputs)
     assert debug_path.read_text(encoding="utf-8").startswith("<!-- cover dialog failed:")
+
+
+def test_update_video_clicks_both_cover_confirmation_layers(tmp_path, fake_browser):
+    result = call_update_video(write_cookie_file(tmp_path))
+    page = fake_browser.instances[-1]
+
+    assert result is True
+    assert page.cover_upload_path == "cover.jpg"
+    assert page.cover_actions == [
+        ("cover-settings", None),
+        ("upload", "cover.jpg"),
+        ("cover-editor-done", None),
+        ("cover-dialog-confirm", None),
+    ]
