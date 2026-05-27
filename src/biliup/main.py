@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from pathlib import Path
 
 from DrissionPage import ChromiumOptions, ChromiumPage
 
@@ -9,11 +10,50 @@ class UploadConfirmationError(RuntimeError):
     """Raised when Bilibili upload did not reach the success confirmation state."""
 
 
+SNAPSHOT_PATH = Path("biliup_upload_debug_latest.html")
+
+
 def _wait_for_required_result(wait_call, message):
     result = wait_call()
     if result is False:
         raise UploadConfirmationError(message)
     return result
+
+
+def _save_debug_html(driver, reason, path=None):
+    if path is None:
+        path = SNAPSHOT_PATH
+    html = getattr(driver, "html", "")
+    payload = f"<!-- {reason} -->\n{html}"
+    snapshot_path = Path(path).resolve()
+    snapshot_path.write_text(payload, encoding="utf-8")
+    print(f"Biliup debug HTML saved: {snapshot_path}")
+    return snapshot_path
+
+
+def _try_upload_cover(driver, cover_path):
+    try:
+        _wait_for_required_result(
+            lambda: driver.wait.eles_loaded("封面设置"),
+            "Upload page did not expose cover settings after video upload.",
+        )
+        driver.ele("封面设置").click()
+        driver.ele("上传封面").click.to_upload(cover_path)
+        done_ele = driver.ele(" 完成 ")
+        _wait_for_required_result(
+            done_ele.wait.displayed,
+            "Cover upload dialog did not show the completion button.",
+        )
+        done_ele.click()
+        _wait_for_required_result(
+            done_ele.wait.disabled_or_deleted,
+            "Cover upload dialog did not close after completion.",
+        )
+        return True
+    except Exception as exc:
+        _save_debug_html(driver, f"cover dialog failed: {exc}")
+        print(f"Cover dialog failed, continuing with metadata fields: {exc}")
+        return False
 
 
 def _hold_browser_open_after_unexpected_stop(exc):
@@ -121,23 +161,7 @@ def update_video(
                 else:
                     raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
 
-        _wait_for_required_result(
-            lambda: driver.wait.eles_loaded("封面设置"),
-            "Upload page did not expose cover settings after video upload.",
-        )
-        driver.ele("封面设置").click()
-        driver.ele("上传封面").click.to_upload(cover_path)
-        # driver.ele(".bcc-dialog__body").ele(".bcc-upload").click.to_upload(cover_path)
-        done_ele = driver.ele(" 完成 ")
-        _wait_for_required_result(
-            done_ele.wait.displayed,
-            "Cover upload dialog did not show the completion button.",
-        )
-        done_ele.click()
-        _wait_for_required_result(
-            done_ele.wait.disabled_or_deleted,
-            "Cover upload dialog did not close after completion.",
-        )
+        _try_upload_cover(driver, cover_path)
 
         title_ele = driver.ele(".video-title").ele(".input-val")
         title_ele.wait.not_covered()
@@ -168,6 +192,8 @@ def update_video(
         )
         return upload_confirmed
     except Exception as exc:
+        if driver is not None:
+            _save_debug_html(driver, f"upload stopped unexpectedly: {exc}")
         _hold_browser_open_after_unexpected_stop(exc)
     finally:
         if upload_confirmed and driver is not None:
