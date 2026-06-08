@@ -64,6 +64,7 @@ def _click_first_displayed(driver, locators, message):
 
 def _try_upload_cover(driver, cover_path):
     try:
+        cover_file = str(Path(cover_path).expanduser().resolve())
         _wait_for_required_result(
             lambda: driver.wait.eles_loaded(
                 "xpath://span[contains(@class, 'edit-text') and contains(normalize-space(), '封面设置')]"
@@ -82,12 +83,14 @@ def _try_upload_cover(driver, cover_path):
         upload_input = _first_available(
             driver,
             (
-                "css:.cover-upload input[type='file'][accept*='image']",
-                "xpath://input[@type='file' and contains(@accept, 'image')]",
+                "xpath://span[normalize-space()='上传封面']/ancestor::div[contains(@class, 'bcc-upload-wrapper')]//input[@type='file' and contains(@accept, 'image')]",
+                "xpath://div[contains(@class, 'cover-editor-panel-select')]//div[contains(@class, 'cover-upload')]//input[@type='file' and contains(@accept, 'image')]",
+                "css:.cover-editor-panel-select .cover-upload input[type='file'][accept*='image']",
+                "css:.cover-editor .cover-upload input[type='file'][accept*='image']",
             ),
             "Cover upload file input is not available.",
         )
-        upload_input.input(cover_path)
+        upload_input.input(cover_file)
 
         _click_first_displayed(
             driver,

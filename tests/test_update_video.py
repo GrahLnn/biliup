@@ -195,7 +195,12 @@ class FakeChromiumPage:
     def eles(self, locator, timeout=None):
         if "edit-text" in locator or "封面设置" in locator:
             return [FakeElement("cover-settings", self, displayed=self.cover_available)]
-        if "cover-upload" in locator or "contains(@accept, 'image')" in locator:
+        if (
+            "上传封面" in locator
+            or "cover-editor-panel-select" in locator
+            or ".cover-editor-panel-select .cover-upload" in locator
+            or ".cover-editor .cover-upload" in locator
+        ):
             return [FakeElement("cover-file-input", self, displayed=False)]
         if "cover-editor-button" in locator and "完成" in locator:
             return [
@@ -255,10 +260,14 @@ def write_cookie_file(tmp_path):
 
 
 def call_update_video(cookie_file):
+    return call_update_video_with_cover(cookie_file, "cover.jpg")
+
+
+def call_update_video_with_cover(cookie_file, cover_path):
     return main.update_video(
         video_path="video.mp4",
         title="title",
-        cover_path="cover.jpg",
+        cover_path=cover_path,
         tags=["tag"],
         description="line 1\nline 2",
         cookie_path=str(cookie_file),
@@ -271,12 +280,13 @@ def test_update_video_returns_success_and_closes_browser_on_confirmed_submit(
 ):
     result = call_update_video(write_cookie_file(tmp_path))
     page = fake_browser.instances[-1]
+    expected_cover_path = str(Path("cover.jpg").resolve())
 
     assert result is True
     assert page.quit_called is True
     assert page.cover_actions == [
         ("cover-settings", None),
-        ("upload", "cover.jpg"),
+        ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
     ]
@@ -318,12 +328,25 @@ def test_update_video_continues_metadata_fields_when_cover_dialog_fails(
 def test_update_video_clicks_both_cover_confirmation_layers(tmp_path, fake_browser):
     result = call_update_video(write_cookie_file(tmp_path))
     page = fake_browser.instances[-1]
+    expected_cover_path = str(Path("cover.jpg").resolve())
 
     assert result is True
-    assert page.cover_upload_path == "cover.jpg"
+    assert page.cover_upload_path == expected_cover_path
     assert page.cover_actions == [
         ("cover-settings", None),
-        ("upload", "cover.jpg"),
+        ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
     ]
+
+
+def test_update_video_normalizes_cover_path_for_file_input(tmp_path, fake_browser):
+    cover_file = tmp_path / "cover.jpg"
+    cover_file.write_bytes(b"image")
+
+    result = call_update_video_with_cover(write_cookie_file(tmp_path), cover_file)
+    page = fake_browser.instances[-1]
+
+    assert result is True
+    assert isinstance(page.cover_upload_path, str)
+    assert page.cover_upload_path == str(cover_file.resolve())
