@@ -38,16 +38,35 @@ class FakeClick:
             if self.element.name in {
                 "cover-settings",
                 "cover-editor-done",
+                "cover-post-confirm-done",
                 "cover-dialog-confirm",
                 "cover-sync-confirm",
             }:
                 self.element.page.cover_actions.append((self.element.name, None))
+            if self.element.name == "cover-editor-done":
+                self.element.page.cover_done_available = False
             if self.element.name == "cover-dialog-confirm":
+                if self.element.page.cover_post_confirm_done_required:
+                    self.element.page.cover_post_confirm_done_available = True
+                else:
+                    self.element.page.cover_dialog_confirm_available = False
+                if (
+                    self.element.page.cover_sync_confirm_required
+                    and not self.element.page.cover_post_confirm_done_required
+                ):
+                    self.element.page.cover_sync_confirm_available = True
+            if self.element.name == "cover-post-confirm-done":
                 self.element.page.cover_dialog_confirm_available = False
-                if self.element.page.cover_sync_confirm_required:
+                self.element.page.cover_post_confirm_done_available = False
+                if (
+                    self.element.page.cover_sync_confirm_required
+                    and not self.element.page.cover_done_after_sync_required
+                ):
                     self.element.page.cover_sync_confirm_available = True
             if self.element.name == "cover-sync-confirm":
                 self.element.page.cover_sync_confirm_available = False
+                if self.element.page.cover_done_after_sync_required:
+                    self.element.page.cover_post_confirm_done_available = True
 
     def to_upload(self, path):
         self.uploaded_path = path
@@ -167,7 +186,10 @@ class FakeChromiumPage:
     cover_available = True
     cover_done_available = True
     cover_close_confirmed = True
+    cover_confirm_closes_after_click = True
     cover_sync_confirm_required = True
+    cover_done_after_sync_required = False
+    cover_post_confirm_done_required = False
     cover_upload_becomes_ready = True
     element_displayed = True
     element_disabled_or_deleted = True
@@ -178,11 +200,21 @@ class FakeChromiumPage:
         self.cover_available = FakeChromiumPage.cover_available
         self.cover_done_available = FakeChromiumPage.cover_done_available
         self.cover_close_confirmed = FakeChromiumPage.cover_close_confirmed
+        self.cover_confirm_closes_after_click = (
+            FakeChromiumPage.cover_confirm_closes_after_click
+        )
         self.cover_sync_confirm_required = FakeChromiumPage.cover_sync_confirm_required
+        self.cover_done_after_sync_required = (
+            FakeChromiumPage.cover_done_after_sync_required
+        )
+        self.cover_post_confirm_done_required = (
+            FakeChromiumPage.cover_post_confirm_done_required
+        )
         self.cover_upload_becomes_ready = FakeChromiumPage.cover_upload_becomes_ready
         self.cover_upload_ready = False
         self.cover_editor_loading = True
         self.cover_dialog_confirm_available = True
+        self.cover_post_confirm_done_available = False
         self.cover_sync_confirm_available = False
         self.element_displayed = FakeChromiumPage.element_displayed
         self.element_disabled_or_deleted = FakeChromiumPage.element_disabled_or_deleted
@@ -229,11 +261,17 @@ class FakeChromiumPage:
                 return []
             return [FakeElement("cover-editor-loading", self, displayed=True)]
         if "cover-editor-button" in locator and "完成" in locator:
+            if self.cover_done_available:
+                name = "cover-editor-done"
+            elif self.cover_post_confirm_done_available:
+                name = "cover-post-confirm-done"
+            else:
+                return []
             return [
                 FakeElement(
-                    "cover-editor-done",
+                    name,
                     self,
-                    displayed=self.cover_done_available,
+                    displayed=True,
                 )
             ]
         if "bcc-dialog__footer" in locator and "确认同步" in locator:
@@ -257,7 +295,7 @@ class FakeChromiumPage:
                     "cover-dialog-confirm",
                     self,
                     displayed=self.cover_close_confirmed,
-                    disabled_or_deleted=self.cover_close_confirmed,
+                    disabled_or_deleted=self.cover_confirm_closes_after_click,
                 )
             ]
         return []
@@ -282,7 +320,10 @@ def fake_browser(monkeypatch):
     FakeChromiumPage.cover_available = True
     FakeChromiumPage.cover_done_available = True
     FakeChromiumPage.cover_close_confirmed = True
+    FakeChromiumPage.cover_confirm_closes_after_click = True
     FakeChromiumPage.cover_sync_confirm_required = True
+    FakeChromiumPage.cover_done_after_sync_required = False
+    FakeChromiumPage.cover_post_confirm_done_required = False
     FakeChromiumPage.cover_upload_becomes_ready = True
     FakeChromiumPage.element_displayed = True
     FakeChromiumPage.element_disabled_or_deleted = True
@@ -416,3 +457,40 @@ def test_update_video_accepts_cover_confirmation_without_sync_layer(
     assert result is True
     assert ("cover-dialog-confirm", None) in page.cover_actions
     assert ("cover-sync-confirm", None) not in page.cover_actions
+
+
+def test_update_video_clicks_cover_done_after_confirm_layer(tmp_path, fake_browser):
+    fake_browser.cover_confirm_closes_after_click = False
+    fake_browser.cover_post_confirm_done_required = True
+
+    result = call_update_video(write_cookie_file(tmp_path))
+    page = fake_browser.instances[-1]
+    expected_cover_path = str(Path("cover.jpg").resolve())
+
+    assert result is True
+    assert page.cover_actions == [
+        ("cover-settings", None),
+        ("upload", expected_cover_path),
+        ("cover-editor-done", None),
+        ("cover-dialog-confirm", None),
+        ("cover-post-confirm-done", None),
+        ("cover-sync-confirm", None),
+    ]
+
+
+def test_update_video_clicks_cover_done_after_sync_confirm(tmp_path, fake_browser):
+    fake_browser.cover_done_after_sync_required = True
+
+    result = call_update_video(write_cookie_file(tmp_path))
+    page = fake_browser.instances[-1]
+    expected_cover_path = str(Path("cover.jpg").resolve())
+
+    assert result is True
+    assert page.cover_actions == [
+        ("cover-settings", None),
+        ("upload", expected_cover_path),
+        ("cover-editor-done", None),
+        ("cover-dialog-confirm", None),
+        ("cover-sync-confirm", None),
+        ("cover-post-confirm-done", None),
+    ]

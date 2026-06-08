@@ -71,29 +71,46 @@ def _click_optional_displayed(driver, locators, timeout=3):
     return element
 
 
-def _confirm_cover_dialogs(driver, max_clicks=4):
-    confirm_locators = (
+def _confirm_cover_dialogs(driver, max_clicks=8):
+    sync_locators = (
         "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确认同步']]",
+    )
+    confirm_locators = (
         "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确定']]",
         "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确认']]",
     )
+    completion_locators = (
+        "xpath://div[contains(@class, 'cover-editor-button')]//div[contains(@class, 'submit') and contains(normalize-space(), '完成')]",
+        "xpath://div[contains(@class, 'cover-editor-button')]//*[contains(normalize-space(), '完成')]",
+    )
     clicked = False
-    last_confirm = None
     for _ in range(max_clicks):
-        confirm = _click_optional_displayed(driver, confirm_locators)
-        if confirm is None:
-            break
+        sync = _click_optional_displayed(driver, sync_locators, timeout=1)
+        if sync is not None:
+            clicked = True
+            sync.wait.disabled_or_deleted()
+            completion = _click_optional_displayed(driver, completion_locators, timeout=5)
+            if completion is not None:
+                clicked = True
+                completion.wait.disabled_or_deleted()
+            continue
+
+        completion = _click_optional_displayed(driver, completion_locators, timeout=1)
+        if completion is None:
+            confirm = _click_optional_displayed(driver, confirm_locators, timeout=1)
+            if confirm is None:
+                break
+            clicked = True
+            confirm.wait.disabled_or_deleted()
+            continue
+
         clicked = True
-        last_confirm = confirm
-        confirm.wait.disabled_or_deleted()
+        completion.wait.disabled_or_deleted()
+    else:
+        raise CoverUploadError("Cover confirmation dialog did not close.")
 
     if not clicked:
         raise CoverUploadError("Cover confirmation button is not visible.")
-    if last_confirm is not None:
-        _wait_for_required_result(
-            last_confirm.wait.disabled_or_deleted,
-            "Cover confirmation dialog did not close.",
-        )
 
 
 def _wait_for_cover_upload_ready(driver, timeout=30):
