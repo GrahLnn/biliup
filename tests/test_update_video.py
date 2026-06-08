@@ -39,8 +39,15 @@ class FakeClick:
                 "cover-settings",
                 "cover-editor-done",
                 "cover-dialog-confirm",
+                "cover-sync-confirm",
             }:
                 self.element.page.cover_actions.append((self.element.name, None))
+            if self.element.name == "cover-dialog-confirm":
+                self.element.page.cover_dialog_confirm_available = False
+                if self.element.page.cover_sync_confirm_required:
+                    self.element.page.cover_sync_confirm_available = True
+            if self.element.name == "cover-sync-confirm":
+                self.element.page.cover_sync_confirm_available = False
 
     def to_upload(self, path):
         self.uploaded_path = path
@@ -157,6 +164,7 @@ class FakeChromiumPage:
     cover_available = True
     cover_done_available = True
     cover_close_confirmed = True
+    cover_sync_confirm_required = True
     element_displayed = True
     element_disabled_or_deleted = True
 
@@ -166,6 +174,9 @@ class FakeChromiumPage:
         self.cover_available = FakeChromiumPage.cover_available
         self.cover_done_available = FakeChromiumPage.cover_done_available
         self.cover_close_confirmed = FakeChromiumPage.cover_close_confirmed
+        self.cover_sync_confirm_required = FakeChromiumPage.cover_sync_confirm_required
+        self.cover_dialog_confirm_available = True
+        self.cover_sync_confirm_available = False
         self.element_displayed = FakeChromiumPage.element_displayed
         self.element_disabled_or_deleted = FakeChromiumPage.element_disabled_or_deleted
         self.wait = FakeWait(self)
@@ -210,9 +221,22 @@ class FakeChromiumPage:
                     displayed=self.cover_done_available,
                 )
             ]
+        if "bcc-dialog__footer" in locator and "确认同步" in locator:
+            if not self.cover_sync_confirm_available:
+                return []
+            return [
+                FakeElement(
+                    "cover-sync-confirm",
+                    self,
+                    displayed=True,
+                    disabled_or_deleted=True,
+                )
+            ]
         if "bcc-dialog__footer" in locator and (
             "确定" in locator or "确认" in locator
         ):
+            if not self.cover_dialog_confirm_available:
+                return []
             return [
                 FakeElement(
                     "cover-dialog-confirm",
@@ -243,6 +267,7 @@ def fake_browser(monkeypatch):
     FakeChromiumPage.cover_available = True
     FakeChromiumPage.cover_done_available = True
     FakeChromiumPage.cover_close_confirmed = True
+    FakeChromiumPage.cover_sync_confirm_required = True
     FakeChromiumPage.element_displayed = True
     FakeChromiumPage.element_disabled_or_deleted = True
     monkeypatch.setattr(main, "ChromiumOptions", FakeChromiumOptions)
@@ -289,6 +314,7 @@ def test_update_video_returns_success_and_closes_browser_on_confirmed_submit(
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
+        ("cover-sync-confirm", None),
     ]
 
 
@@ -337,6 +363,7 @@ def test_update_video_clicks_both_cover_confirmation_layers(tmp_path, fake_brows
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
+        ("cover-sync-confirm", None),
     ]
 
 
@@ -350,3 +377,16 @@ def test_update_video_normalizes_cover_path_for_file_input(tmp_path, fake_browse
     assert result is True
     assert isinstance(page.cover_upload_path, str)
     assert page.cover_upload_path == str(cover_file.resolve())
+
+
+def test_update_video_accepts_cover_confirmation_without_sync_layer(
+    tmp_path, fake_browser
+):
+    fake_browser.cover_sync_confirm_required = False
+
+    result = call_update_video(write_cookie_file(tmp_path))
+    page = fake_browser.instances[-1]
+
+    assert result is True
+    assert ("cover-dialog-confirm", None) in page.cover_actions
+    assert ("cover-sync-confirm", None) not in page.cover_actions

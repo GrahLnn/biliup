@@ -62,6 +62,40 @@ def _click_first_displayed(driver, locators, message):
     return element
 
 
+def _click_optional_displayed(driver, locators, timeout=3):
+    try:
+        element = _first_displayed(driver, locators, "", timeout=timeout)
+    except CoverUploadError:
+        return None
+    element.click(by_js=True)
+    return element
+
+
+def _confirm_cover_dialogs(driver, max_clicks=4):
+    confirm_locators = (
+        "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确认同步']]",
+        "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确定']]",
+        "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确认']]",
+    )
+    clicked = False
+    last_confirm = None
+    for _ in range(max_clicks):
+        confirm = _click_optional_displayed(driver, confirm_locators)
+        if confirm is None:
+            break
+        clicked = True
+        last_confirm = confirm
+        confirm.wait.disabled_or_deleted()
+
+    if not clicked:
+        raise CoverUploadError("Cover confirmation button is not visible.")
+    if last_confirm is not None:
+        _wait_for_required_result(
+            last_confirm.wait.disabled_or_deleted,
+            "Cover confirmation dialog did not close.",
+        )
+
+
 def _try_upload_cover(driver, cover_path):
     try:
         cover_file = str(Path(cover_path).expanduser().resolve())
@@ -101,18 +135,7 @@ def _try_upload_cover(driver, cover_path):
             "Cover editor completion button is not visible.",
         )
 
-        confirm_ele = _click_first_displayed(
-            driver,
-            (
-                "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确定']]",
-                "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确认']]",
-            ),
-            "Cover confirmation button is not visible.",
-        )
-        _wait_for_required_result(
-            confirm_ele.wait.disabled_or_deleted,
-            "Cover confirmation dialog did not close.",
-        )
+        _confirm_cover_dialogs(driver)
         return True
     except Exception as exc:
         _save_debug_html(driver, f"cover dialog failed: {exc}")
