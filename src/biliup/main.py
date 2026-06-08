@@ -96,6 +96,37 @@ def _confirm_cover_dialogs(driver, max_clicks=4):
         )
 
 
+def _wait_for_cover_upload_ready(driver, timeout=30):
+    _first_displayed(
+        driver,
+        (
+            "xpath://div[contains(@class, 'cover-editor-panel-select')]//div[contains(@class, 'cover-upload')]//div[contains(@class, 'upload-area') and contains(@class, 'has-image')]",
+            "css:.cover-editor-panel-select .cover-upload .upload-area.has-image",
+            "css:.cover-editor .cover-upload .upload-area.has-image",
+        ),
+        "Cover upload preview did not update after file input.",
+        timeout=timeout,
+    )
+    deadline = time.monotonic() + timeout
+    loading_locators = (
+        "css:.cover-editor-panel-canvas-loading",
+        "css:.cover-editor-panel-canvas .upload-mask",
+    )
+    while time.monotonic() < deadline:
+        is_loading = False
+        for locator in loading_locators:
+            for element in driver.eles(locator, timeout=0.5):
+                if element.states.is_displayed:
+                    is_loading = True
+                    break
+            if is_loading:
+                break
+        if not is_loading:
+            return
+        time.sleep(0.5)
+    raise CoverUploadError("Cover editor did not finish applying uploaded cover.")
+
+
 def _try_upload_cover(driver, cover_path):
     try:
         cover_file = str(Path(cover_path).expanduser().resolve())
@@ -125,6 +156,7 @@ def _try_upload_cover(driver, cover_path):
             "Cover upload file input is not available.",
         )
         upload_input.input(cover_file)
+        _wait_for_cover_upload_ready(driver)
 
         _click_first_displayed(
             driver,

@@ -90,6 +90,9 @@ class FakeElement:
             self.page.inputs.append((self.name, value, clear))
             if self.name == "cover-file-input":
                 self.page.cover_upload_path = value
+                if self.page.cover_upload_becomes_ready:
+                    self.page.cover_upload_ready = True
+                    self.page.cover_editor_loading = False
                 self.page.cover_actions.append(("upload", value))
 
 
@@ -165,6 +168,7 @@ class FakeChromiumPage:
     cover_done_available = True
     cover_close_confirmed = True
     cover_sync_confirm_required = True
+    cover_upload_becomes_ready = True
     element_displayed = True
     element_disabled_or_deleted = True
 
@@ -175,6 +179,9 @@ class FakeChromiumPage:
         self.cover_done_available = FakeChromiumPage.cover_done_available
         self.cover_close_confirmed = FakeChromiumPage.cover_close_confirmed
         self.cover_sync_confirm_required = FakeChromiumPage.cover_sync_confirm_required
+        self.cover_upload_becomes_ready = FakeChromiumPage.cover_upload_becomes_ready
+        self.cover_upload_ready = False
+        self.cover_editor_loading = True
         self.cover_dialog_confirm_available = True
         self.cover_sync_confirm_available = False
         self.element_displayed = FakeChromiumPage.element_displayed
@@ -212,7 +219,15 @@ class FakeChromiumPage:
             or ".cover-editor-panel-select .cover-upload" in locator
             or ".cover-editor .cover-upload" in locator
         ):
+            if "has-image" in locator:
+                if not self.cover_upload_ready:
+                    return []
+                return [FakeElement("cover-upload-preview", self, displayed=True)]
             return [FakeElement("cover-file-input", self, displayed=False)]
+        if "cover-editor-panel-canvas-loading" in locator or "upload-mask" in locator:
+            if not self.cover_editor_loading:
+                return []
+            return [FakeElement("cover-editor-loading", self, displayed=True)]
         if "cover-editor-button" in locator and "完成" in locator:
             return [
                 FakeElement(
@@ -268,6 +283,7 @@ def fake_browser(monkeypatch):
     FakeChromiumPage.cover_done_available = True
     FakeChromiumPage.cover_close_confirmed = True
     FakeChromiumPage.cover_sync_confirm_required = True
+    FakeChromiumPage.cover_upload_becomes_ready = True
     FakeChromiumPage.element_displayed = True
     FakeChromiumPage.element_disabled_or_deleted = True
     monkeypatch.setattr(main, "ChromiumOptions", FakeChromiumOptions)
@@ -349,6 +365,16 @@ def test_update_video_continues_metadata_fields_when_cover_dialog_fails(
     assert any(value == "title" for _, value, _ in page.inputs)
     assert any(value == "tag\n" for _, value, _ in page.inputs)
     assert debug_path.read_text(encoding="utf-8").startswith("<!-- cover dialog failed:")
+
+
+def test_cover_upload_ready_wait_requires_uploaded_preview(fake_browser):
+    page = fake_browser(None)
+    fake_browser.cover_upload_becomes_ready = False
+
+    with pytest.raises(main.CoverUploadError):
+        main._wait_for_cover_upload_ready(page, timeout=0.01)
+
+    assert page.cover_upload_ready is False
 
 
 def test_update_video_clicks_both_cover_confirmation_layers(tmp_path, fake_browser):
