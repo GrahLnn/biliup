@@ -17,6 +17,10 @@ class CoverUploadError(RuntimeError):
     """Raised when Bilibili cover upload controls are not in the expected state."""
 
 
+class CreationStatementError(RuntimeError):
+    """Raised when Bilibili creation statement controls are not in the expected state."""
+
+
 def _wait_for_required_result(wait_call, message):
     result = wait_call()
     if result is False:
@@ -69,6 +73,28 @@ def _click_optional_displayed(driver, locators, timeout=3):
         return None
     element.click(by_js=True)
     return element
+
+
+def _select_default_creation_statement(driver):
+    try:
+        _click_first_displayed(
+            driver,
+            (
+                "xpath://h3[normalize-space()='创作声明']/ancestor::div[contains(@class, 'creation-statement-container')]//input[contains(@class, 'bcc-select-input-inner')]",
+                "xpath://input[@placeholder='请选择符合您视频内容的创作声明']",
+            ),
+            "Creation statement selector is not visible.",
+        )
+        _click_first_displayed(
+            driver,
+            (
+                "xpath://h3[normalize-space()='创作声明']/ancestor::div[contains(@class, 'creation-statement-container')]//li[contains(@class, 'bcc-option')][.//span[normalize-space()='内容无需标注']]",
+                "xpath://li[contains(@class, 'bcc-option')][.//span[normalize-space()='内容无需标注']]",
+            ),
+            "Default creation statement option is not visible.",
+        )
+    except CoverUploadError as exc:
+        raise CreationStatementError(str(exc)) from exc
 
 
 def _confirm_cover_dialogs(driver, max_clicks=8):
@@ -297,6 +323,7 @@ def update_video(
                 else:
                     raise Exception(f"上传失败，已尝试{max_retries}次：{str(e)}")
 
+        _select_default_creation_statement(driver)
         _try_upload_cover(driver, cover_path)
 
         title_ele = driver.ele(".video-title").ele(".input-val")

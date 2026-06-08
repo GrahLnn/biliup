@@ -67,6 +67,8 @@ class FakeClick:
                 self.element.page.cover_sync_confirm_available = False
                 if self.element.page.cover_done_after_sync_required:
                     self.element.page.cover_post_confirm_done_available = True
+            if self.element.name == "creation-statement-default":
+                self.element.page.creation_statement_selected = True
 
     def to_upload(self, path):
         self.uploaded_path = path
@@ -229,6 +231,7 @@ class FakeChromiumPage:
         self.elements = []
         self.cover_upload_path = None
         self.cover_actions = []
+        self.creation_statement_selected = False
         self.html = "<html><body>debug page</body></html>"
         FakeChromiumPage.instances.append(self)
 
@@ -243,6 +246,22 @@ class FakeChromiumPage:
         return element
 
     def eles(self, locator, timeout=None):
+        if "内容无需标注" in locator:
+            return [
+                FakeElement(
+                    "creation-statement-default",
+                    self,
+                    displayed=True,
+                )
+            ]
+        if "创作声明" in locator or "请选择符合您视频内容的创作声明" in locator:
+            return [
+                FakeElement(
+                    "creation-statement-select",
+                    self,
+                    displayed=True,
+                )
+            ]
         if "edit-text" in locator or "封面设置" in locator:
             return [FakeElement("cover-settings", self, displayed=self.cover_available)]
         if (
@@ -372,6 +391,29 @@ def test_update_video_returns_success_and_closes_browser_on_confirmed_submit(
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
         ("cover-sync-confirm", None),
+    ]
+
+
+def test_update_video_selects_creation_statement_before_cover_upload(
+    tmp_path, fake_browser
+):
+    result = call_update_video(write_cookie_file(tmp_path))
+    page = fake_browser.instances[-1]
+    click_names = [name for name, _ in page.clicks]
+
+    assert result is True
+    assert page.creation_statement_selected is True
+    assert click_names.index("creation-statement-select") < click_names.index(
+        "cover-settings"
+    )
+    assert click_names.index("creation-statement-default") < click_names.index(
+        "cover-settings"
+    )
+    assert "creation-statement-select" not in [
+        name for name, _ in page.cover_actions
+    ]
+    assert "creation-statement-default" not in [
+        name for name, _ in page.cover_actions
     ]
 
 
