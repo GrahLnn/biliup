@@ -37,7 +37,6 @@ class FakeClick:
             self.element.page.clicks.append((self.element.name, kwargs))
             if self.element.name in {
                 "cover-main-entry",
-                "cover-settings",
                 "cover-editor-done",
                 "cover-post-confirm-done",
                 "cover-dialog-confirm",
@@ -127,10 +126,6 @@ class FakeWait:
         return self.page.submit_confirmed
 
     @property
-    def cover_available(self):
-        return self.page.cover_available
-
-    @property
     def cover_done_available(self):
         return self.page.cover_done_available
 
@@ -156,11 +151,7 @@ class FakeWait:
         if locator == "稿件投递成功":
             return self.submit_confirmed
         if "添加主封面" in locator:
-            if "封面设置" in locator:
-                return self.page.main_cover_available or self.cover_available
             return self.page.main_cover_available
-        if "封面设置" in locator:
-            return self.cover_available
         return True
 
     def __call__(self, seconds):
@@ -190,8 +181,7 @@ class FakeChromiumOptions:
 class FakeChromiumPage:
     instances = []
     submit_confirmed = True
-    cover_available = True
-    main_cover_available = False
+    main_cover_available = True
     pk_cover_available = False
     cover_done_available = True
     cover_close_confirmed = True
@@ -206,7 +196,6 @@ class FakeChromiumPage:
     def __init__(self, options):
         self.options = options
         self.submit_confirmed = FakeChromiumPage.submit_confirmed
-        self.cover_available = FakeChromiumPage.cover_available
         self.main_cover_available = FakeChromiumPage.main_cover_available
         self.pk_cover_available = FakeChromiumPage.pk_cover_available
         self.cover_done_available = FakeChromiumPage.cover_done_available
@@ -279,8 +268,6 @@ class FakeChromiumPage:
             if not self.pk_cover_available:
                 return []
             return [FakeElement("cover-pk-entry", self, displayed=True)]
-        if "edit-text" in locator or "封面设置" in locator:
-            return [FakeElement("cover-settings", self, displayed=self.cover_available)]
         if (
             "上传封面" in locator
             or "cover-editor-panel-select" in locator
@@ -353,8 +340,7 @@ class FakeChromiumPage:
 def fake_browser(monkeypatch):
     FakeChromiumPage.instances = []
     FakeChromiumPage.submit_confirmed = True
-    FakeChromiumPage.cover_available = True
-    FakeChromiumPage.main_cover_available = False
+    FakeChromiumPage.main_cover_available = True
     FakeChromiumPage.pk_cover_available = False
     FakeChromiumPage.cover_done_available = True
     FakeChromiumPage.cover_close_confirmed = True
@@ -399,7 +385,6 @@ def test_try_upload_cover_accepts_main_cover_entry_before_file_upload(
     fake_browser, monkeypatch
 ):
     page = fake_browser(None)
-    page.cover_available = False
     page.main_cover_available = True
     page.pk_cover_available = True
     monkeypatch.setattr(main, "_save_debug_html", lambda *args, **kwargs: None)
@@ -417,7 +402,6 @@ def test_try_upload_cover_accepts_main_cover_entry_before_file_upload(
 
 def test_try_upload_cover_does_not_accept_pk_cover_entry(fake_browser, monkeypatch):
     page = fake_browser(None)
-    page.cover_available = False
     page.main_cover_available = False
     page.pk_cover_available = True
     monkeypatch.setattr(main, "_save_debug_html", lambda *args, **kwargs: None)
@@ -439,7 +423,7 @@ def test_update_video_returns_success_and_closes_browser_on_confirmed_submit(
     assert result is True
     assert page.quit_called is True
     assert page.cover_actions == [
-        ("cover-settings", None),
+        ("cover-main-entry", None),
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
@@ -457,10 +441,10 @@ def test_update_video_selects_creation_statement_before_cover_upload(
     assert result is True
     assert page.creation_statement_selected is True
     assert click_names.index("creation-statement-select") < click_names.index(
-        "cover-settings"
+        "cover-main-entry"
     )
     assert click_names.index("creation-statement-default") < click_names.index(
-        "cover-settings"
+        "cover-main-entry"
     )
     assert "creation-statement-select" not in [
         name for name, _ in page.cover_actions
@@ -490,7 +474,7 @@ def test_update_video_continues_metadata_fields_when_cover_dialog_fails(
     tmp_path, fake_browser, monkeypatch
 ):
     debug_path = tmp_path / "biliup_upload_debug_latest.html"
-    fake_browser.cover_available = False
+    fake_browser.main_cover_available = False
     monkeypatch.setattr(main, "SNAPSHOT_PATH", debug_path)
 
     result = call_update_video(write_cookie_file(tmp_path))
@@ -521,7 +505,7 @@ def test_update_video_clicks_both_cover_confirmation_layers(tmp_path, fake_brows
     assert result is True
     assert page.cover_upload_path == expected_cover_path
     assert page.cover_actions == [
-        ("cover-settings", None),
+        ("cover-main-entry", None),
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
@@ -564,7 +548,7 @@ def test_update_video_clicks_cover_done_after_confirm_layer(tmp_path, fake_brows
 
     assert result is True
     assert page.cover_actions == [
-        ("cover-settings", None),
+        ("cover-main-entry", None),
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
@@ -582,7 +566,7 @@ def test_update_video_clicks_cover_done_after_sync_confirm(tmp_path, fake_browse
 
     assert result is True
     assert page.cover_actions == [
-        ("cover-settings", None),
+        ("cover-main-entry", None),
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
