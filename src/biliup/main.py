@@ -173,18 +173,21 @@ def _wait_for_cover_upload_ready(driver, timeout=30):
 def _try_upload_cover(driver, cover_path):
     try:
         cover_file = str(Path(cover_path).expanduser().resolve())
+        cover_entry_wait_locator = (
+            "xpath:(//div[contains(concat(' ',normalize-space(@class),' '), ' cover-empty-pill ')][.//span[normalize-space()='添加主封面']] | //span[contains(@class, 'edit-text') and contains(normalize-space(), '封面设置')])"
+        )
+        cover_entry_locators = (
+            "xpath://div[contains(concat(' ',normalize-space(@class),' '), ' cover-empty-pill ')][.//span[normalize-space()='添加主封面']]",
+            "xpath://span[contains(@class, 'edit-text') and contains(normalize-space(), '封面设置')]",
+            "text:封面设置",
+        )
         _wait_for_required_result(
-            lambda: driver.wait.eles_loaded(
-                "xpath://span[contains(@class, 'edit-text') and contains(normalize-space(), '封面设置')]"
-            ),
+            lambda: driver.wait.eles_loaded(cover_entry_wait_locator),
             "Upload page did not expose cover settings after video upload.",
         )
         _click_first_displayed(
             driver,
-            (
-                "xpath://span[contains(@class, 'edit-text') and contains(normalize-space(), '封面设置')]",
-                "text:封面设置",
-            ),
+            cover_entry_locators,
             "Cover settings entry is not visible.",
         )
 

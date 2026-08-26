@@ -36,6 +36,7 @@ class FakeClick:
         if self.element is not None and self.element.page is not None:
             self.element.page.clicks.append((self.element.name, kwargs))
             if self.element.name in {
+                "cover-main-entry",
                 "cover-settings",
                 "cover-editor-done",
                 "cover-post-confirm-done",
@@ -154,6 +155,10 @@ class FakeWait:
     def eles_loaded(self, locator, timeout=None):
         if locator == "稿件投递成功":
             return self.submit_confirmed
+        if "添加主封面" in locator:
+            if "封面设置" in locator:
+                return self.page.main_cover_available or self.cover_available
+            return self.page.main_cover_available
         if "封面设置" in locator:
             return self.cover_available
         return True
@@ -186,6 +191,8 @@ class FakeChromiumPage:
     instances = []
     submit_confirmed = True
     cover_available = True
+    main_cover_available = False
+    pk_cover_available = False
     cover_done_available = True
     cover_close_confirmed = True
     cover_confirm_closes_after_click = True
@@ -200,6 +207,8 @@ class FakeChromiumPage:
         self.options = options
         self.submit_confirmed = FakeChromiumPage.submit_confirmed
         self.cover_available = FakeChromiumPage.cover_available
+        self.main_cover_available = FakeChromiumPage.main_cover_available
+        self.pk_cover_available = FakeChromiumPage.pk_cover_available
         self.cover_done_available = FakeChromiumPage.cover_done_available
         self.cover_close_confirmed = FakeChromiumPage.cover_close_confirmed
         self.cover_confirm_closes_after_click = (
@@ -262,6 +271,14 @@ class FakeChromiumPage:
                     displayed=True,
                 )
             ]
+        if "添加主封面" in locator:
+            if not self.main_cover_available:
+                return []
+            return [FakeElement("cover-main-entry", self, displayed=True)]
+        if "添加PK封面" in locator:
+            if not self.pk_cover_available:
+                return []
+            return [FakeElement("cover-pk-entry", self, displayed=True)]
         if "edit-text" in locator or "封面设置" in locator:
             return [FakeElement("cover-settings", self, displayed=self.cover_available)]
         if (
@@ -337,6 +354,8 @@ def fake_browser(monkeypatch):
     FakeChromiumPage.instances = []
     FakeChromiumPage.submit_confirmed = True
     FakeChromiumPage.cover_available = True
+    FakeChromiumPage.main_cover_available = False
+    FakeChromiumPage.pk_cover_available = False
     FakeChromiumPage.cover_done_available = True
     FakeChromiumPage.cover_close_confirmed = True
     FakeChromiumPage.cover_confirm_closes_after_click = True
@@ -374,6 +393,40 @@ def call_update_video_with_cover(cookie_file, cover_path):
         cookie_path=str(cookie_file),
         headless=False,
     )
+
+
+def test_try_upload_cover_accepts_main_cover_entry_before_file_upload(
+    fake_browser, monkeypatch
+):
+    page = fake_browser(None)
+    page.cover_available = False
+    page.main_cover_available = True
+    page.pk_cover_available = True
+    monkeypatch.setattr(main, "_save_debug_html", lambda *args, **kwargs: None)
+
+    result = main._try_upload_cover(page, "cover.jpg")
+
+    expected_cover_path = str(Path("cover.jpg").resolve())
+    assert result is True
+    assert page.cover_actions[0] == ("cover-main-entry", None)
+    assert page.cover_actions.index(("cover-main-entry", None)) < page.cover_actions.index(
+        ("upload", expected_cover_path)
+    )
+    assert ("cover-pk-entry", None) not in page.cover_actions
+
+
+def test_try_upload_cover_does_not_accept_pk_cover_entry(fake_browser, monkeypatch):
+    page = fake_browser(None)
+    page.cover_available = False
+    page.main_cover_available = False
+    page.pk_cover_available = True
+    monkeypatch.setattr(main, "_save_debug_html", lambda *args, **kwargs: None)
+
+    result = main._try_upload_cover(page, "cover.jpg")
+
+    assert result is False
+    assert page.cover_upload_path is None
+    assert ("cover-pk-entry", None) not in page.cover_actions
 
 
 def test_update_video_returns_success_and_closes_browser_on_confirmed_submit(
