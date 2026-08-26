@@ -139,23 +139,24 @@ def _confirm_cover_dialogs(driver, max_clicks=8):
         raise CoverUploadError("Cover confirmation button is not visible.")
 
 
-def _wait_for_cover_upload_ready(driver, timeout=30):
-    _first_displayed(
-        driver,
-        (
-            "xpath://div[contains(@class, 'cover-editor-panel-select')]//div[contains(@class, 'cover-upload')]//div[contains(@class, 'upload-area') and contains(@class, 'has-image')]",
-            "css:.cover-editor-panel-select .cover-upload .upload-area.has-image",
-            "css:.cover-editor .cover-upload .upload-area.has-image",
-        ),
-        "Cover upload preview did not update after file input.",
-        timeout=timeout,
+def _wait_for_cover_upload_ready(driver, previous_preview, timeout=30):
+    preview_locator = (
+        "xpath://div[contains(@class, 'cover-editor-panel-select')]//div[contains(@class, 'cover-upload')]//div[contains(@class, 'upload-area')][.//span[normalize-space()='上传封面']]"
     )
     deadline = time.monotonic() + timeout
     loading_locators = (
         "css:.cover-editor-panel-canvas-loading",
         "css:.cover-editor-panel-canvas .upload-mask",
     )
+    stable_preview = None
+    stable_since = None
     while time.monotonic() < deadline:
+        preview = None
+        for element in driver.eles(preview_locator, timeout=0.5):
+            if element.states.is_displayed:
+                preview = element.style("background-image")
+                break
+
         is_loading = False
         for locator in loading_locators:
             for element in driver.eles(locator, timeout=0.5):
@@ -164,10 +165,19 @@ def _wait_for_cover_upload_ready(driver, timeout=30):
                     break
             if is_loading:
                 break
-        if not is_loading:
-            return
-        time.sleep(0.5)
-    raise CoverUploadError("Cover editor did not finish applying uploaded cover.")
+
+        if preview and preview != "none" and preview != previous_preview and not is_loading:
+            now = time.monotonic()
+            if preview != stable_preview:
+                stable_preview = preview
+                stable_since = now
+            elif stable_since is not None and now - stable_since >= 0.5:
+                return
+        else:
+            stable_preview = None
+            stable_since = None
+        time.sleep(0.1)
+    raise CoverUploadError("Cover preview did not change after selecting the upload file.")
 
 
 def _try_upload_cover(driver, cover_path):
@@ -186,18 +196,17 @@ def _try_upload_cover(driver, cover_path):
             "Cover settings entry is not visible.",
         )
 
-        upload_input = _first_available(
+        upload_trigger = _first_displayed(
             driver,
             (
-                "xpath://span[normalize-space()='上传封面']/ancestor::div[contains(@class, 'bcc-upload-wrapper')]//input[@type='file' and contains(@accept, 'image')]",
-                "xpath://div[contains(@class, 'cover-editor-panel-select')]//div[contains(@class, 'cover-upload')]//input[@type='file' and contains(@accept, 'image')]",
-                "css:.cover-editor-panel-select .cover-upload input[type='file'][accept*='image']",
-                "css:.cover-editor .cover-upload input[type='file'][accept*='image']",
+                "xpath://div[contains(@class, 'cover-editor-panel-select')]//div[contains(@class, 'cover-upload')]//div[contains(@class, 'upload-area')][.//span[normalize-space()='上传封面']]",
             ),
-            "Cover upload file input is not available.",
+            "Cover upload control is not visible.",
         )
-        upload_input.input(cover_file)
-        _wait_for_cover_upload_ready(driver)
+        previous_preview = upload_trigger.style("background-image")
+        driver.set.upload_files(cover_file)
+        upload_trigger.click()
+        _wait_for_cover_upload_ready(driver, previous_preview)
 
         _click_first_displayed(
             driver,

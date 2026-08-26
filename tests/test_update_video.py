@@ -37,6 +37,7 @@ class FakeClick:
             self.element.page.clicks.append((self.element.name, kwargs))
             if self.element.name in {
                 "cover-main-entry",
+                "cover-upload-trigger",
                 "cover-editor-done",
                 "cover-post-confirm-done",
                 "cover-dialog-confirm",
@@ -67,6 +68,17 @@ class FakeClick:
                 self.element.page.cover_sync_confirm_available = False
                 if self.element.page.cover_done_after_sync_required:
                     self.element.page.cover_post_confirm_done_available = True
+            if self.element.name == "cover-upload-trigger":
+                upload_path = self.element.page.pending_cover_upload_path
+                if upload_path is not None:
+                    self.element.page.cover_upload_path = upload_path
+                    self.element.page.cover_actions.append(("upload", upload_path))
+                    self.element.page.pending_cover_upload_path = None
+                    if self.element.page.cover_upload_applies:
+                        self.element.page.cover_preview_identity = (
+                            'url("blob:uploaded-cover")'
+                        )
+                        self.element.page.cover_editor_loading = False
             if self.element.name == "creation-statement-default":
                 self.element.page.creation_statement_selected = True
 
@@ -109,12 +121,11 @@ class FakeElement:
         self.inputs.append((value, clear))
         if self.page is not None:
             self.page.inputs.append((self.name, value, clear))
-            if self.name == "cover-file-input":
-                self.page.cover_upload_path = value
-                if self.page.cover_upload_becomes_ready:
-                    self.page.cover_upload_ready = True
-                    self.page.cover_editor_loading = False
-                self.page.cover_actions.append(("upload", value))
+
+    def style(self, name):
+        if name == "background-image" and self.page is not None:
+            return self.page.cover_preview_identity
+        return ""
 
 
 class FakeWait:
@@ -159,11 +170,15 @@ class FakeWait:
 
 
 class FakeSetter:
-    def __init__(self):
+    def __init__(self, page):
+        self.page = page
         self.cookies_value = None
 
     def cookies(self, cookies):
         self.cookies_value = cookies
+
+    def upload_files(self, files):
+        self.page.pending_cover_upload_path = files
 
 
 class FakeChromiumOptions:
@@ -189,7 +204,7 @@ class FakeChromiumPage:
     cover_sync_confirm_required = True
     cover_done_after_sync_required = False
     cover_post_confirm_done_required = False
-    cover_upload_becomes_ready = True
+    cover_upload_applies = True
     element_displayed = True
     element_disabled_or_deleted = True
 
@@ -210,16 +225,16 @@ class FakeChromiumPage:
         self.cover_post_confirm_done_required = (
             FakeChromiumPage.cover_post_confirm_done_required
         )
-        self.cover_upload_becomes_ready = FakeChromiumPage.cover_upload_becomes_ready
-        self.cover_upload_ready = False
-        self.cover_editor_loading = True
+        self.cover_upload_applies = FakeChromiumPage.cover_upload_applies
+        self.cover_preview_identity = 'url("blob:video-frame")'
+        self.cover_editor_loading = False
         self.cover_dialog_confirm_available = True
         self.cover_post_confirm_done_available = False
         self.cover_sync_confirm_available = False
         self.element_displayed = FakeChromiumPage.element_displayed
         self.element_disabled_or_deleted = FakeChromiumPage.element_disabled_or_deleted
         self.wait = FakeWait(self)
-        self.set = FakeSetter()
+        self.set = FakeSetter(self)
         self.quit_called = False
         self.refreshed = False
         self.urls = []
@@ -228,6 +243,7 @@ class FakeChromiumPage:
         self.inputs = []
         self.elements = []
         self.cover_upload_path = None
+        self.pending_cover_upload_path = None
         self.cover_actions = []
         self.creation_statement_selected = False
         self.html = "<html><body>debug page</body></html>"
@@ -268,17 +284,8 @@ class FakeChromiumPage:
             if not self.pk_cover_available:
                 return []
             return [FakeElement("cover-pk-entry", self, displayed=True)]
-        if (
-            "上传封面" in locator
-            or "cover-editor-panel-select" in locator
-            or ".cover-editor-panel-select .cover-upload" in locator
-            or ".cover-editor .cover-upload" in locator
-        ):
-            if "has-image" in locator:
-                if not self.cover_upload_ready:
-                    return []
-                return [FakeElement("cover-upload-preview", self, displayed=True)]
-            return [FakeElement("cover-file-input", self, displayed=False)]
+        if "上传封面" in locator and "upload-area" in locator:
+            return [FakeElement("cover-upload-trigger", self, displayed=True)]
         if "cover-editor-panel-canvas-loading" in locator or "upload-mask" in locator:
             if not self.cover_editor_loading:
                 return []
@@ -348,7 +355,7 @@ def fake_browser(monkeypatch):
     FakeChromiumPage.cover_sync_confirm_required = True
     FakeChromiumPage.cover_done_after_sync_required = False
     FakeChromiumPage.cover_post_confirm_done_required = False
-    FakeChromiumPage.cover_upload_becomes_ready = True
+    FakeChromiumPage.cover_upload_applies = True
     FakeChromiumPage.element_displayed = True
     FakeChromiumPage.element_disabled_or_deleted = True
     monkeypatch.setattr(main, "ChromiumOptions", FakeChromiumOptions)
@@ -394,6 +401,10 @@ def test_try_upload_cover_accepts_main_cover_entry_before_file_upload(
     expected_cover_path = str(Path("cover.jpg").resolve())
     assert result is True
     assert page.cover_actions[0] == ("cover-main-entry", None)
+    assert ("cover-upload-trigger", None) in page.cover_actions
+    assert page.cover_actions.index(("cover-upload-trigger", None)) < page.cover_actions.index(
+        ("upload", expected_cover_path)
+    )
     assert page.cover_actions.index(("cover-main-entry", None)) < page.cover_actions.index(
         ("upload", expected_cover_path)
     )
@@ -413,6 +424,28 @@ def test_try_upload_cover_does_not_accept_pk_cover_entry(fake_browser, monkeypat
     assert ("cover-pk-entry", None) not in page.cover_actions
 
 
+def test_try_upload_cover_does_not_confirm_preexisting_video_frame(
+    fake_browser, monkeypatch
+):
+    page = fake_browser(None)
+    page.cover_upload_applies = False
+    monkeypatch.setattr(main, "_save_debug_html", lambda *args, **kwargs: None)
+    wait_for_upload = main._wait_for_cover_upload_ready
+    monkeypatch.setattr(
+        main,
+        "_wait_for_cover_upload_ready",
+        lambda driver, previous_preview: wait_for_upload(
+            driver, previous_preview, timeout=0.01
+        ),
+    )
+
+    result = main._try_upload_cover(page, "cover.jpg")
+
+    assert result is False
+    assert ("cover-editor-done", None) not in page.cover_actions
+    assert ("cover-dialog-confirm", None) not in page.cover_actions
+
+
 def test_update_video_returns_success_and_closes_browser_on_confirmed_submit(
     tmp_path, fake_browser
 ):
@@ -424,6 +457,7 @@ def test_update_video_returns_success_and_closes_browser_on_confirmed_submit(
     assert page.quit_called is True
     assert page.cover_actions == [
         ("cover-main-entry", None),
+        ("cover-upload-trigger", None),
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
@@ -487,14 +521,12 @@ def test_update_video_continues_metadata_fields_when_cover_dialog_fails(
     assert debug_path.read_text(encoding="utf-8").startswith("<!-- cover dialog failed:")
 
 
-def test_cover_upload_ready_wait_requires_uploaded_preview(fake_browser):
+def test_cover_upload_ready_wait_requires_changed_preview(fake_browser):
     page = fake_browser(None)
-    fake_browser.cover_upload_becomes_ready = False
+    previous_preview = page.cover_preview_identity
 
     with pytest.raises(main.CoverUploadError):
-        main._wait_for_cover_upload_ready(page, timeout=0.01)
-
-    assert page.cover_upload_ready is False
+        main._wait_for_cover_upload_ready(page, previous_preview, timeout=0.01)
 
 
 def test_update_video_clicks_both_cover_confirmation_layers(tmp_path, fake_browser):
@@ -506,6 +538,7 @@ def test_update_video_clicks_both_cover_confirmation_layers(tmp_path, fake_brows
     assert page.cover_upload_path == expected_cover_path
     assert page.cover_actions == [
         ("cover-main-entry", None),
+        ("cover-upload-trigger", None),
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
@@ -549,6 +582,7 @@ def test_update_video_clicks_cover_done_after_confirm_layer(tmp_path, fake_brows
     assert result is True
     assert page.cover_actions == [
         ("cover-main-entry", None),
+        ("cover-upload-trigger", None),
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
@@ -567,6 +601,7 @@ def test_update_video_clicks_cover_done_after_sync_confirm(tmp_path, fake_browse
     assert result is True
     assert page.cover_actions == [
         ("cover-main-entry", None),
+        ("cover-upload-trigger", None),
         ("upload", expected_cover_path),
         ("cover-editor-done", None),
         ("cover-dialog-confirm", None),
