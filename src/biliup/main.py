@@ -66,15 +66,6 @@ def _click_first_displayed(driver, locators, message):
     return element
 
 
-def _click_optional_displayed(driver, locators, timeout=3):
-    try:
-        element = _first_displayed(driver, locators, "", timeout=timeout)
-    except CoverUploadError:
-        return None
-    element.click(by_js=True)
-    return element
-
-
 def _select_default_creation_statement(driver):
     try:
         _click_first_displayed(
@@ -97,46 +88,19 @@ def _select_default_creation_statement(driver):
         raise CreationStatementError(str(exc)) from exc
 
 
-def _confirm_cover_dialogs(driver, max_clicks=8):
-    sync_locators = (
-        "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确认同步']]",
-    )
-    confirm_locators = (
-        "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确定']]",
-        "xpath://div[contains(@class, 'bcc-dialog__footer')]//button[contains(@class, 'bcc-button--primary')][.//span[normalize-space()='确认']]",
-    )
-    completion_locators = (
-        "xpath://div[contains(@class, 'cover-editor-button')]//div[contains(@class, 'submit') and contains(normalize-space(), '完成')]",
-        "xpath://div[contains(@class, 'cover-editor-button')]//*[contains(normalize-space(), '完成')]",
-    )
-    clicked = False
-    for _ in range(max_clicks):
-        sync = _click_optional_displayed(driver, sync_locators, timeout=1)
-        if sync is not None:
-            clicked = True
-            sync.wait.disabled_or_deleted()
-            completion = _click_optional_displayed(driver, completion_locators, timeout=5)
-            if completion is not None:
-                clicked = True
-                completion.wait.disabled_or_deleted()
-            continue
-
-        completion = _click_optional_displayed(driver, completion_locators, timeout=1)
-        if completion is None:
-            confirm = _click_optional_displayed(driver, confirm_locators, timeout=1)
-            if confirm is None:
-                break
-            clicked = True
-            confirm.wait.disabled_or_deleted()
-            continue
-
-        clicked = True
-        completion.wait.disabled_or_deleted()
-    else:
-        raise CoverUploadError("Cover confirmation dialog did not close.")
-
-    if not clicked:
-        raise CoverUploadError("Cover confirmation button is not visible.")
+def _wait_for_cover_file_selected(upload_input, cover_path, timeout=10):
+    expected_name = cover_path.name
+    expected_size = cover_path.stat().st_size
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        receipt = upload_input.run_js(
+            "return this.files && this.files.length === 1 "
+            "? [this.files[0].name, this.files[0].size] : null;"
+        )
+        if receipt == [expected_name, expected_size]:
+            return
+        time.sleep(0.1)
+    raise CoverUploadError("Cover file chooser did not select the requested image.")
 
 
 def _wait_for_cover_upload_ready(driver, previous_preview, timeout=30):
@@ -172,7 +136,7 @@ def _wait_for_cover_upload_ready(driver, previous_preview, timeout=30):
                 stable_preview = preview
                 stable_since = now
             elif stable_since is not None and now - stable_since >= 0.5:
-                return
+                return preview
         else:
             stable_preview = None
             stable_since = None
@@ -180,9 +144,40 @@ def _wait_for_cover_upload_ready(driver, previous_preview, timeout=30):
     raise CoverUploadError("Cover preview did not change after selecting the upload file.")
 
 
+def _wait_for_cover_editor_closed(driver, timeout=10):
+    editor_locator = (
+        "xpath://div[contains(concat(' ',normalize-space(@class),' '), ' cover-editor-content ')][.//div[contains(concat(' ',normalize-space(@class),' '), ' cover-editor-panel-select ')]]"
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not any(
+            element.states.is_displayed
+            for element in driver.eles(editor_locator, timeout=0.5)
+        ):
+            return
+        time.sleep(0.1)
+    raise CoverUploadError("Cover editor did not close after applying the uploaded image.")
+
+
+def _wait_for_main_cover_applied(driver, timeout=30):
+    main_cover_locator = (
+        "xpath://div[contains(concat(' ',normalize-space(@class),' '), ' cover-main ')]//div[contains(concat(' ',normalize-space(@class),' '), ' cover-img ')]"
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for element in driver.eles(main_cover_locator, timeout=0.5):
+            background = element.style("background-image")
+            if element.states.is_displayed and background and background != "none":
+                return background
+        time.sleep(0.1)
+    raise CoverUploadError("Uploaded cover was not applied to the main cover slot.")
+
+
 def _try_upload_cover(driver, cover_path):
     try:
-        cover_file = str(Path(cover_path).expanduser().resolve())
+        cover_file = Path(cover_path).expanduser().resolve()
+        if not cover_file.is_file():
+            raise CoverUploadError(f"Cover file does not exist: {cover_file}")
         cover_entry_locator = (
             "xpath://div[contains(concat(' ',normalize-space(@class),' '), ' cover-empty-pill ')][.//span[normalize-space()='添加主封面']]"
         )
@@ -196,28 +191,35 @@ def _try_upload_cover(driver, cover_path):
             "Cover settings entry is not visible.",
         )
 
+        upload_input = _first_available(
+            driver,
+            (
+                "xpath://div[contains(concat(' ',normalize-space(@class),' '), ' cover-editor-panel-select ')]//div[contains(concat(' ',normalize-space(@class),' '), ' cover-upload ')]//div[contains(concat(' ',normalize-space(@class),' '), ' bcc-upload-wrapper ')]/input[@type='file' and @accept='image/png, image/jpeg']",
+            ),
+            "Cover upload file input is not available.",
+        )
         upload_trigger = _first_displayed(
             driver,
             (
-                "xpath://div[contains(@class, 'cover-editor-panel-select')]//div[contains(@class, 'cover-upload')]//div[contains(@class, 'upload-area')][.//span[normalize-space()='上传封面']]",
+                "xpath://div[contains(concat(' ',normalize-space(@class),' '), ' cover-editor-panel-select ')]//div[contains(concat(' ',normalize-space(@class),' '), ' cover-upload ')]//div[contains(concat(' ',normalize-space(@class),' '), ' upload-area ')][.//span[contains(concat(' ',normalize-space(@class),' '), ' upload-text ') and normalize-space()='上传封面']]",
             ),
             "Cover upload control is not visible.",
         )
         previous_preview = upload_trigger.style("background-image")
-        driver.set.upload_files(cover_file)
-        upload_trigger.click()
+        upload_trigger.click.to_upload(str(cover_file))
+        _wait_for_cover_file_selected(upload_input, cover_file)
         _wait_for_cover_upload_ready(driver, previous_preview)
 
         _click_first_displayed(
             driver,
             (
-                "xpath://div[contains(@class, 'cover-editor-button')]//div[contains(@class, 'submit') and contains(normalize-space(), '完成')]",
-                "xpath://div[contains(@class, 'cover-editor-button')]//*[contains(normalize-space(), '完成')]",
+                "xpath://div[contains(concat(' ',normalize-space(@class),' '), ' cover-editor-button ')]/div[contains(concat(' ',normalize-space(@class),' '), ' submit ') and normalize-space()='完成']",
             ),
             "Cover editor completion button is not visible.",
         )
 
-        _confirm_cover_dialogs(driver)
+        _wait_for_cover_editor_closed(driver)
+        _wait_for_main_cover_applied(driver)
         return True
     except Exception as exc:
         _save_debug_html(driver, f"cover dialog failed: {exc}")
